@@ -22,6 +22,8 @@ import {
   Bech32Address,
   encodeSecp256k1Signature,
   serializeSignDoc,
+  makeADR36AminoSignDoc,
+  verifyADR36Amino,
 } from "@keplr-wallet/cosmos";
 import {
   CosmJSOfflineSigner,
@@ -143,21 +145,51 @@ export class MockKeplr implements Keplr {
     });
   }
 
-  signArbitrary(
-    _chainId: string,
-    _signer: string,
-    _data: string | Uint8Array
+  async signArbitrary(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array
   ): Promise<StdSignature> {
-    throw new Error("Not implemented");
+    const wallet = await this.getWallet(chainId);
+
+    const key = await this.getKey(chainId);
+    if (signer !== key.bech32Address) {
+      throw new Error("Unmatched signer");
+    }
+
+    const signature = wallet.signDigest32(
+      Hash.sha256(serializeSignDoc(makeADR36AminoSignDoc(data, signer)))
+    );
+
+    return {
+      signed: data,
+      signature: encodeSecp256k1Signature(
+        wallet.getPubKey().toBytes(),
+        new Uint8Array([...signature.r, ...signature.s])
+      ),
+    };
   }
 
-  verifyArbitrary(
-    _chainId: string,
-    _signer: string,
-    _data: string | Uint8Array,
-    _signature: StdSignature
+  async verifyArbitrary(
+    chainId: string,
+    signer: string,
+    data: string | Uint8Array,
+    signature: StdSignature
   ): Promise<boolean> {
-    throw new Error("Not implemented");
+    const wallet = await this.getWallet(chainId);
+
+    const key = await this.getKey(chainId);
+    if (signer !== key.bech32Address) {
+      throw new Error("Unmatched signer");
+    }
+
+    return verifyADR36Amino(
+      "todo",
+      signer,
+      data,
+      wallet.getPubKey(),
+      signature
+    );
   }
 
   signEthereum(
